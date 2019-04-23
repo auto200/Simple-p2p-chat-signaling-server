@@ -17,22 +17,19 @@ const io = socketIO(server, {
 //_global array of ids of all connected users
 const __users = [];
 
-//_global assoc array of connections (pipes) between users
+//_global assoc array of connections (pipes) between users. Indexed by unique id
 const __connections = [];
 
 io.on("connection", socket => {
   console.log(`new connection: ${socket.id}`);
   __users.push(socket.id);
 
-  const idsOfPipesThatUserIsPartOf = [];
-
-  //check if there are other users connected or is it the only one
+  //check if there are other users connected or is the only one
   if (__users.length > 1) {
     const otherUsers = __users.filter(user => user !== socket.id);
-    //loop through other users, creating new pipes for each
+    //loop through other users, creating new pipes between new user and every other user
     otherUsers.forEach(otherUser => {
       const pipeId = uuid();
-      idsOfPipesThatUserIsPartOf.push(pipeId);
       __connections[pipeId] = createNewPipe(socket.id, otherUser);
       //send message to specific user to create a pipe and listen for incoming connection
       io.to(otherUser).emit("createNewPipe", {
@@ -64,12 +61,14 @@ io.on("connection", socket => {
   });
 
   socket.on("disconnect", reason => {
-    console.log(`user: ${socket.id} - disconnected. Reason:`, reason);
-    // remove user from __users array and delete pipes that user was part of
+    console.log(`user: ${socket.id} - disconnected. Reason: ${reason}`);
+
     __users.splice(__users.indexOf(socket.id), 1);
-    idsOfPipesThatUserIsPartOf.forEach(id => {
-      delete __connections[id];
-    });
+    //delete pipes that user was part of
+    for (const conn in __connections) {
+      if (__connections[conn].usersIds.includes(socket.id))
+        delete __connections[conn];
+    }
     console.log(__connections);
   });
 });
